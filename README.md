@@ -160,7 +160,135 @@ Would you like a version of this as a GitHub repo template or a Dockerized setup
 
 
 
+Use Dapr's secret management API to securely access secrets from a backend like local environment, Kubernetes secrets, or Vault, using Python.
 
+We'll use local environment variables as the secret backend for simplicity.
+
+📁 Project Structure
+bash
+Copy
+Edit
+dapr-python-secrets/
+├── app.py
+├── components/
+│   └── secretstore.yaml
+└── .env
+📄 1. components/secretstore.yaml – Dapr Secret Store Component
+🔐 Local Environment Secret Store
+yaml
+Copy
+Edit
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: secretstore
+  namespace: default
+spec:
+  type: secretstores.local.env
+  version: v1
+This tells Dapr to read secrets from your environment variables.
+
+📄 2. .env – Define Secrets
+Create a .env file in your project root (used during local testing):
+
+env
+Copy
+Edit
+MY_API_KEY=abc123secure
+DB_PASSWORD=supersecretpass
+Load these into your environment before running:
+
+bash
+Copy
+Edit
+export $(cat .env | xargs)
+🐍 3. app.py – Python App to Fetch Secrets from Dapr
+python
+Copy
+Edit
+from fastapi import FastAPI
+from dapr.clients import DaprClient
+import uvicorn
+
+app = FastAPI()
+secret_store_name = "secretstore"
+
+@app.get("/get-secret/{key}")
+async def get_secret(key: str):
+    with DaprClient() as client:
+        secrets = client.get_secret(secret_store_name, key)
+        value = secrets.secret.get(key)
+        return {"key": key, "value": value}
+
+@app.get("/get-all-secrets")
+async def get_all_secrets():
+    with DaprClient() as client:
+        secrets = client.get_bulk_secret(secret_store_name)
+        return secrets.secrets
+
+if __name__ == "__main__":
+    uvicorn.run("app:app", host="0.0.0.0", port=8000)
+▶️ 4. Run App with Dapr
+bash
+Copy
+Edit
+dapr run \
+  --app-id secret-app \
+  --app-port 8000 \
+  --components-path ./components \
+  -- uvicorn app:app --port 8000
+🧪 5. Testing with curl or Postman
+🔑 Get a single secret
+bash
+Copy
+Edit
+curl http://localhost:8000/get-secret/MY_API_KEY
+🔐 Get all secrets
+bash
+Copy
+Edit
+curl http://localhost:8000/get-all-secrets
+🔧 6. Using Other Secret Backends (e.g., Kubernetes)
+Replace secretstore.yaml with a Kubernetes Secret Store:
+
+yaml
+Copy
+Edit
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: secretstore
+spec:
+  type: secretstores.kubernetes
+  version: v1
+Ensure you have Kubernetes secrets like:
+
+yaml
+Copy
+Edit
+apiVersion: v1
+kind: Secret
+metadata:
+  name: my-k8s-secret
+type: Opaque
+data:
+  MY_API_KEY: YWJjMTIzc2VjdXJl  # base64 encoded
+🧰 7. Notes
+Secrets are not cached by default; you can change this in the component metadata.
+
+Always use Dapr's gRPC/HTTP APIs to access secrets securely from within apps, never inject them directly into your code.
+
+📦 Optional: Using REST instead of Python SDK
+Get Secret via REST:
+bash
+Copy
+Edit
+curl http://localhost:3500/v1.0/secrets/secretstore/MY_API_KEY
+Get All Secrets:
+bash
+Copy
+Edit
+curl http://localhost:3500/v1.0/secrets/secretstore
 
 
 
